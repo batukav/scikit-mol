@@ -1,11 +1,14 @@
 from collections.abc import Sequence
 from typing import Optional, Union
+from types import ModuleType
+import rdkit
 
 import numpy as np
 from numpy.typing import NDArray
 from rdkit import Chem
 from rdkit.rdBase import BlockLogs
 from sklearn.base import BaseEstimator, TransformerMixin
+from rdkit.Chem.Scaffolds import MurckoScaffold
 
 from scikit_mol._constants import DOCS_BASE_URL
 from scikit_mol.core import (
@@ -127,3 +130,71 @@ class SmilesToMolTransformer(TransformerMixin, NoFitNeededMixin, BaseEstimator):
             raise ValueError(f"Invalid Mols found: {fails}.")
 
         return np.array(X_out).reshape(-1, 1)
+
+
+class MolToScaffoldTransformer(SmilesToMolTransformer):
+    """
+    Transformer for converting SMILES strings to molecular scaffolds.
+    First converts SMILES to RDKit mol objects, then extracts the scaffold.
+    """
+
+    def __init__(
+        self,
+        n_jobs: Optional[None] = None,
+        safe_inference_mode: bool = False,
+        scaffold_transformer: ModuleType = MurckoScaffold,
+    ):
+        super().__init__(n_jobs, safe_inference_mode)
+        self.scaffold_transformer = scaffold_transformer
+
+        # Question: How generic should be the scaffold transformer?
+        # For now, just for demonstration I'm using the MurckoScaffold class
+
+    def transform(
+        self, X_smiles_list: Sequence[str]
+    ) -> NDArray[Union[Chem.Mol, InvalidMol]]:
+        # First step: convert SMILES to molecules using parent class
+        mols = super().transform(X_smiles_list, y=None).flatten()
+
+        self.mols = mols  # to be deleted
+        # Second step: convert molecules to scaffolds
+        scaffolds = (
+            []
+        )  # TODO: this will be very slow for large datasets, improve efficiency via initializing list
+        for mol in mols:
+            if isinstance(mol, Chem.Mol):
+                try:
+                    scaffold = self.scaffold_transformer.GetScaffoldForMol(mol)
+                    scaffolds.append(scaffold)
+                except Exception as e:
+                    scaffolds.append(
+                        InvalidMol(str(self), f"Error creating scaffold: {e}")
+                    )
+            else:
+                scaffolds.append(mol)  # Keep InvalidMol objects as is
+
+        self.scaffolds = np.array(scaffolds).reshape(-1, 1).flatten()
+        return np.array(scaffolds).reshape(-1, 1)
+
+    def get_unique_scaffold_ids(self) -> NDArray[np.int_]:
+
+        scaffold_smiles = self._create_smiles_from_mol()
+        # Get unique labels
+        _, labels = np.unique(scaffold_smiles, return_inverse=True)
+
+        return labels
+
+    def _create_smiles_from_mol(self):
+
+        if type(self.scaffolds) == rdkit.Chem.rdchem.Mol:
+            return Chem.MolToSmiles(self.scaffolds)
+        elif type(self.scaffolds) == np.ndarray:
+            scaffold_smiles = []
+            for scaffold in self.scaffolds:
+                scaffold_smiles.append(Chem.MolToSmiles(scaffold))
+
+            return scaffold_smiles
+        else:
+            raise RuntimeError("Unknown data type ")
+        # Keep scaffold_smiles ??
+        # self.scaffold_smiles = scaffold_smiles
