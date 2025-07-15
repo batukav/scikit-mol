@@ -158,6 +158,8 @@ class StratifiedGroupShuffleSplit(BaseShuffleSplit):
                 if test_groups
                 else []
             )
+            if len(test_indices) == 0:
+                raise RuntimeError(f"Given the dataset, no train/test split could be found. Try increasing test_size")
             all_indices = np.arange(n_samples)
             train_indices = np.setdiff1d(all_indices, test_indices, assume_unique=True)
             
