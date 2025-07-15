@@ -142,9 +142,16 @@ class StratifiedGroupShuffleSplit(BaseShuffleSplit):
                     undershoot_error = n_test - current_test_size
                     overshoot_error = best_overshoot_group["size"] - n_test
 
-                    if overshoot_error < undershoot_error:
-                        # If overshooting is closer to the target, add the group
-                        test_groups.append(best_overshoot_group["id"])
+                    valid_overshoot_candidates = []
+                    for cand in overshoot_candidates:
+                        overshoot_error = cand["size"] - n_test
+                        if overshoot_error < undershoot_error:
+                            valid_overshoot_candidates.append(cand["id"])
+
+                        if valid_overshoot_candidates:
+                            # Randomly choose from the valid overshooting groups
+                            best_overshoot_group_id = rng.choice(valid_overshoot_candidates)
+                            test_groups.append(best_overshoot_group_id)
 
             test_indices = (
                 np.concatenate([group_info[g_idx]["indices"] for g_idx in test_groups])
