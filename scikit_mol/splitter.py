@@ -111,7 +111,11 @@ class StratifiedGroupShuffleSplit(BaseShuffleSplit):
                 safe_candidates.sort(key=lambda x: x["error"])
                 pool_size = min(5, len(safe_candidates))
                 candidate_pool = [cand["id"] for cand in safe_candidates[:pool_size]]
-                best_group = rng.choice(candidate_pool, self.sample_weighted)
+                if self.sample_weighted:
+                    weights = [group_info[group_idx]["size"] for group_idx in candidate_pool]
+                    best_group = rng.choice(candidate_pool, p=weights)
+                else:
+                    best_group = rng.choice(candidate_pool)
 
                 test_groups.append(best_group)
                 available_groups.remove(best_group)
