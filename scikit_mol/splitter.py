@@ -217,19 +217,19 @@ class StratifiedGroupShuffleSplit(BaseShuffleSplit):
                 too_large_groups[group_id] = group_count
         if len(too_large_groups) > 0 and not self.suppress_warnings and n_groups < len(unique_groups):
             warnings.warn(
-                f"""
+                f'''
                           Some groups are too large for the test set and will never be present in the test set: {too_large_groups}.\n 
                           If you want a group to be able to be present in the test set, test_size >= group_size.
-                          """,
+                          ''',
                 UserWarning,
             )
         elif len(too_large_groups) > 0 and not self.suppress_warnings and n_groups == len(unique_groups):
             warnings.warn(
-                """
+                '''
                          "Warning: All available groups are larger than the target test size. 
                          The algorithm will still try to select a group that overshoots the target, 
                          which may lead to a larger than requested test set, or an completely empty test set."
-                          """,
+                          ''',
                 UserWarning,
             )
             
