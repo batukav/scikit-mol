@@ -5,9 +5,13 @@ import warnings
 import pandas as pd
 from collections import defaultdict
 from typing import Union, List
-from sklearn.model_selection._split import BaseShuffleSplit
+from sklearn.model_selection._split import BaseShuffleSplit, _validate_shuffle_split
 from sklearn.utils.validation import _num_samples
 from sklearn.utils import check_random_state
+from sklearn.utils import indexable
+from sklearn.utils._array_api import ensure_common_namespace_device
+from itertools import chain
+from sklearn.utils import _safe_indexing
 
 
 class StratifiedGroupShuffleSplit(BaseShuffleSplit):
@@ -233,3 +237,112 @@ class StratifiedGroupShuffleSplit(BaseShuffleSplit):
                 UserWarning,
             )
             
+
+def train_test_group_split(
+    *arrays,
+    test_size=None,
+    train_size=None,
+    random_state=None,
+    shuffle=True,
+    stratify=None,
+):
+    """Split arrays or matrices into random train and test subsets, while respecting group boundaries.
+
+    Quick utility that wraps input validation and a Group-aware ShuffleSplit
+    into a single call for splitting (and optionally subsampling) data in a
+    one-liner.
+
+    The last passed array is assumed to be the 'groups' array.
+
+    Read more in the :ref:`User Guide <cross_validation>`.
+
+    Parameters
+    ----------
+    *arrays : sequence of indexables with same length / shape[0]
+        Allowed inputs are lists, numpy arrays, scipy-sparse
+        matrices or pandas dataframes. The last array must be the `groups`
+        array.
+
+    test_size : float or int, default=None
+        If float, should be between 0.0 and 1.0 and represent the proportion
+        of the dataset to include in the test split. If int, represents the
+        absolute number of test samples. If None, the value is set to the
+        complement of the train size. If ``train_size`` is also None, it will
+        be set to 0.25.
+
+    train_size : float or int, default=None
+        If float, should be between 0.0 and 1.0 and represent the
+        proportion of the dataset to include in the train split. If
+        int, represents the absolute number of train samples. If None,
+        the value is automatically set to the complement of the test size.
+
+    random_state : int, RandomState instance or None, default=None
+        Controls the shuffling applied to the data before applying the split.
+        Pass an int for reproducible output across multiple function calls.
+        See :term:`Glossary <random_state>`.
+
+    shuffle : bool, default=True
+        Whether or not to shuffle the data before splitting. For group-based
+        splitting, shuffling is always performed on the groups. If shuffle=False,
+        a ValueError will be raised.
+
+    stratify : array-like or bool, default=None
+        If not None, data is split in a stratified fashion, using this as
+        the class labels. If True, it will use the second to last array as
+        stratification labels.
+        Read more in the :ref:`User Guide <stratification>`.
+
+    Returns
+    -------
+    splitting : list, length=2 * len(arrays)
+        List containing train-test split of inputs.
+    """
+    n_arrays = len(arrays)
+    if n_arrays < 2:
+        raise ValueError(
+            "At least two arrays are required as input (e.g., X, groups)."
+        )
+
+    arrays = indexable(*arrays)
+    groups = arrays[-1]
+
+    n_samples = _num_samples(arrays[0])
+    n_train, n_test = _validate_shuffle_split(
+        n_samples, test_size, train_size, default_test_size=0.25
+    )
+
+    if not shuffle:
+        raise ValueError(
+            "shuffle=False is not supported for train_test_group_split. "
+            "Group-based splitting always shuffles the groups."
+        )
+
+    y_for_split = None
+    if stratify is not None:
+        if isinstance(stratify, bool):
+            if stratify:  # stratify=True
+                if n_arrays < 3:
+                    raise ValueError(
+                        "When stratify=True, at least three arrays are required as input (e.g., X, y, groups)."
+                    )
+                y_for_split = arrays[-2]
+                CVClass = StratifiedGroupShuffleSplit
+            else:  # stratify=False
+                CVClass = GroupShuffleSplit
+        else:  # stratify is an array
+            y_for_split = stratify
+            CVClass = StratifiedGroupShuffleSplit
+    else:  # stratify is None
+        CVClass = GroupShuffleSplit
+
+    cv = CVClass(n_splits=1, test_size=n_test, train_size=n_train, random_state=random_state)
+
+    train, test = next(cv.split(X=arrays[0], y=y_for_split, groups=groups))
+
+    train, test = ensure_common_namespace_device(arrays[0], train, test)
+
+    return list(
+        chain.from_iterable(
+            (_safe_indexing(a, train), _safe_indexing(a, test)) for a in arrays
+        )
+    )
