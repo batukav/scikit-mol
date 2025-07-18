@@ -8,6 +8,7 @@ from typing import Union, List
 from sklearn.model_selection._split import BaseShuffleSplit, _validate_shuffle_split
 from sklearn.utils.validation import _num_samples
 from sklearn.utils import check_random_state
+from sklearn.model_selection import GroupShuffleSplit
 from sklearn.utils import indexable
 from sklearn.utils._array_api import ensure_common_namespace_device
 from itertools import chain
@@ -346,3 +347,91 @@ def train_test_group_split(
             (_safe_indexing(a, train), _safe_indexing(a, test)) for a in arrays
         )
     )
+
+
+class GroupSplitCV:
+    """Cross-validator that performs group-aware splits.
+
+    This cross-validator is a wrapper around StratifiedGroupShuffleSplit and
+    GroupShuffleSplit to be used in scikit-learn's GridSearchCV and other
+    similar utilities.
+
+    Parameters
+    ----------
+    n_splits : int, default=5
+        Number of re-shuffling & splitting iterations.
+
+    test_size : float or int, default=0.2
+        If float, should be between 0.0 and 1.0 and represent the proportion
+        of the dataset to include in the test split. If int, represents the
+        absolute number of test samples.
+
+    train_size : float or int, default=None
+        If float, should be between 0.0 and 1.0 and represent the
+        proportion of the dataset to include in the train split. If
+        int, represents the absolute number of train samples. If None,
+        the value is automatically set to the complement of the test size.
+
+    random_state : int, RandomState instance or None, default=None
+        Controls the randomness of the training and testing indices produced.
+        Pass an int for reproducible output across multiple function calls.
+
+    stratify : bool, default=False
+        Whether to perform stratified sampling. If True, the `y` parameter
+        in the `split` method is used for stratification.
+    """
+    def __init__(self, n_splits=5, *, test_size=0.2, train_size=None, random_state=None, stratify=False):
+        self.n_splits = n_splits
+        self.test_size = test_size
+        self.train_size = train_size
+        self.random_state = random_state
+        self.stratify = stratify
+
+    def split(self, X, y=None, groups=None):
+        """
+        Generate indices to split data into training and test set.
+
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Training data, where n_samples is the number of samples
+            and n_features is the number of features.
+
+        y : array-like of shape (n_samples,), default=None
+            The target variable for supervised learning problems.
+            Stratification is done based on the y labels if `stratify=True`.
+
+        groups : array-like of shape (n_samples,)
+            Group labels for the samples used while splitting the dataset into
+            train/test set.
+
+        Yields
+        ------
+        train : ndarray
+            The training set indices for that split.
+
+        test : ndarray
+            The testing set indices for that split.
+        """
+        if self.stratify:
+            if y is None:
+                raise ValueError("The 'y' parameter should not be None when stratify=True.")
+            cv = StratifiedGroupShuffleSplit(
+                n_splits=self.n_splits,
+                test_size=self.test_size,
+                train_size=self.train_size,
+                random_state=self.random_state,
+            )
+            yield from cv.split(X, y, groups=groups)
+        else:
+            cv = GroupShuffleSplit(
+                n_splits=self.n_splits,
+                test_size=self.test_size,
+                train_size=self.train_size,
+                random_state=self.random_state,
+            )
+            yield from cv.split(X, y=y, groups=groups)
+
+    def get_n_splits(self, X=None, y=None, groups=None):
+        """Returns the number of splitting iterations in the cross-validator."""
+        return self.n_splits
