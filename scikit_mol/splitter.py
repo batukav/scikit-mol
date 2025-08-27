@@ -23,10 +23,10 @@ class StratifiedGroupShuffleSplit(BaseShuffleSplit):
         n_splits: int = 5,
         *,
         test_size: float or int = 0.2,
-        train_size: float or int=None,
+        train_size: float or int = None,
         random_state: int = None,
         sample_weighted: bool = False,
-        suppress_warnings: bool = False
+        suppress_warnings: bool = False,
     ):
         super().__init__(
             n_splits=n_splits,
@@ -41,11 +41,16 @@ class StratifiedGroupShuffleSplit(BaseShuffleSplit):
             if self.sample_weighted:
                 warnings.warn(
                     f"sample_weighted = True. During the test split, groups with more samples will be prioritized",
-                UserWarning,
-            )
+                    UserWarning,
+                )
 
-    def _iter_indices(self, X: Union[List, np.ndarray, pd.Series], y: Union[List, np.ndarray, pd.Series], groups: Union[List, np.ndarray, pd.Series]):
-        
+    def _iter_indices(
+        self,
+        X: Union[List, np.ndarray, pd.Series],
+        y: Union[List, np.ndarray, pd.Series],
+        groups: Union[List, np.ndarray, pd.Series],
+    ):
+
         if y is None:
             raise ValueError(
                 "StratifiedGroupShuffleSplit requires 'y' for stratification."
@@ -117,7 +122,9 @@ class StratifiedGroupShuffleSplit(BaseShuffleSplit):
                 pool_size = min(5, len(safe_candidates))
                 candidate_pool = [cand["id"] for cand in safe_candidates[:pool_size]]
                 if self.sample_weighted:
-                    weights = [group_info[group_idx]["size"] for group_idx in candidate_pool]
+                    weights = [
+                        group_info[group_idx]["size"] for group_idx in candidate_pool
+                    ]
                     best_group = rng.choice(candidate_pool, p=weights)
                 else:
                     best_group = rng.choice(candidate_pool)
@@ -155,7 +162,9 @@ class StratifiedGroupShuffleSplit(BaseShuffleSplit):
 
                         if valid_overshoot_candidates:
                             # Randomly choose from the valid overshooting groups
-                            best_overshoot_group_id = rng.choice(valid_overshoot_candidates)
+                            best_overshoot_group_id = rng.choice(
+                                valid_overshoot_candidates
+                            )
                             test_groups.append(best_overshoot_group_id)
 
             test_indices = (
@@ -164,21 +173,27 @@ class StratifiedGroupShuffleSplit(BaseShuffleSplit):
                 else []
             )
             if len(test_indices) == 0:
-                raise RuntimeError(f"Given the dataset, no train/test split could be found. Try increasing test_size")
+                raise RuntimeError(
+                    f"Given the dataset, no train/test split could be found. Try increasing test_size"
+                )
             all_indices = np.arange(n_samples)
             train_indices = np.setdiff1d(all_indices, test_indices, assume_unique=True)
-            
+
             if isinstance(self.test_size, float):
-                
+
                 requested_test_size_ratio = self.test_size
             else:
                 requested_test_size_ratio = self.test_size / n_samples
-                
-            test_size_error = np.abs(len(test_indices)/n_samples - requested_test_size_ratio) 
-            
+
+            test_size_error = np.abs(
+                len(test_indices) / n_samples - requested_test_size_ratio
+            )
+
             if not self.suppress_warnings:
-                if test_size_error > 0.05: # 5% deviation
-                    warnings.warn(f"Requested and calculated test sizes differ by {test_size_error*100:.2f}%")
+                if test_size_error > 0.05:  # 5% deviation
+                    warnings.warn(
+                        f"Requested and calculated test sizes differ by {test_size_error*100:.2f}%"
+                    )
 
             yield train_indices, test_indices
 
@@ -220,27 +235,36 @@ class StratifiedGroupShuffleSplit(BaseShuffleSplit):
             if group_count >= n_test:
                 n_groups += 1
                 too_large_groups[group_id] = group_count
-        if len(too_large_groups) > 0 and not self.suppress_warnings and n_groups < len(unique_groups):
+        if (
+            len(too_large_groups) > 0
+            and not self.suppress_warnings
+            and n_groups < len(unique_groups)
+        ):
             warnings.warn(
-                f'''
+                f"""
                           Some groups are too large for the test set and will never be present in the test set: {too_large_groups}.\n 
                           If you want a group to be able to be present in the test set, test_size >= group_size.
-                          ''',
+                          """,
                 UserWarning,
             )
-        elif len(too_large_groups) > 0 and not self.suppress_warnings and n_groups == len(unique_groups):
+        elif (
+            len(too_large_groups) > 0
+            and not self.suppress_warnings
+            and n_groups == len(unique_groups)
+        ):
             warnings.warn(
-                '''
+                """
                          "Warning: All available groups are larger than the target test size. 
                          The algorithm will still try to select a group that overshoots the target, 
                          which may lead to a larger than requested test set, or an completely empty test set."
-                          ''',
+                          """,
                 UserWarning,
             )
-            
+
 
 def train_test_group_split(
     *arrays,
+    groups=None,
     test_size=None,
     train_size=None,
     random_state=None,
@@ -343,7 +367,9 @@ def train_test_group_split(
     else:  # stratify is None
         CVClass = GroupShuffleSplit
 
-    cv = CVClass(n_splits=1, test_size=n_test, train_size=n_train, random_state=random_state)
+    cv = CVClass(
+        n_splits=1, test_size=n_test, train_size=n_train, random_state=random_state
+    )
 
     train, test = next(cv.split(X=arrays[0], y=y_for_split, groups=groups))
 
@@ -387,7 +413,16 @@ class GroupSplitCV:
         Whether to perform stratified sampling. If True, the `y` parameter
         in the `split` method is used for stratification.
     """
-    def __init__(self, n_splits=5, *, test_size=0.2, train_size=None, random_state=None, stratify=False):
+
+    def __init__(
+        self,
+        n_splits=5,
+        *,
+        test_size=0.2,
+        train_size=None,
+        random_state=None,
+        stratify=False,
+    ):
         self.n_splits = n_splits
         self.test_size = test_size
         self.train_size = train_size
@@ -422,7 +457,9 @@ class GroupSplitCV:
         """
         if self.stratify:
             if y is None:
-                raise ValueError("The 'y' parameter should not be None when stratify=True.")
+                raise ValueError(
+                    "The 'y' parameter should not be None when stratify=True."
+                )
             cv = StratifiedGroupShuffleSplit(
                 n_splits=self.n_splits,
                 test_size=self.test_size,
