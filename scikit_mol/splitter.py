@@ -262,7 +262,10 @@ def train_test_group_split(
     *arrays : sequence of indexables with same length / shape[0]
         Allowed inputs are lists, numpy arrays, scipy-sparse
         matrices or pandas dataframes. The last array must be the `groups`
-        array.
+        array, unless groups variable is set.
+
+    groups : sequence of indexables with the same length / shape[0]
+        Same as *arrays. We allow users to explicity set the groups.
 
     test_size : float or int, default=None
         If float, should be between 0.0 and 1.0 and represent the proportion
@@ -298,16 +301,20 @@ def train_test_group_split(
     splitting : list, length=2 * len(arrays)
         List containing train-test split of inputs.
     """
+
+    if groups is not None:
+        arrays = arrays + (groups,)
     n_arrays = len(arrays)
-    if n_arrays < 2:
-        raise ValueError(
-            "At least two arrays are required as input (e.g., X, groups)."
-        )
+    if n_arrays < 3:
+        raise ValueError("At least two arrays are required as input (e.g., X, groups).")
 
     arrays = indexable(*arrays)
-    groups = arrays[-1]
 
     n_samples = _num_samples(arrays[0])
+
+    assert (
+        len(groups) == n_samples
+    ), f"groups and input arrays should have the same length {len(groups)} != {n_samples}"
     n_train, n_test = _validate_shuffle_split(
         n_samples, test_size, train_size, default_test_size=0.25
     )
